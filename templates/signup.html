@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Sign Up{% endblock %}
+{% block content %}
+<h1>Sign Up</h1>
+<form method="post" class="mt-3" style="max-width:400px">
+  <div class="mb-3">
+    <label class="form-label">Name</label>
+    <input name="name" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Email</label>
+    <input type="email" name="email" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Password</label>
+    <input type="password" name="password" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Role</label>
+    <select name="role" class="form-select">
+      <option value="renter">Renter</option>
+      <option value="landlord">Landlord</option>
+    </select>
+  </div>
+  <button class="btn btn-success">Create Account</button>
+</form>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Your Houses</h1>
+{% if houses %}
+  <ul class="list-group mt-3">
+    {% for h in houses %}
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ h.title }} – ${{ h.rent }}/mo</span>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('view_applications', house_id=h.id) }}">View Applications</a>
+      </li>
+      <li class="list-group-item d-flex justify-content-between align-items-center">
+        <span>{{ h.title }} – ${{ h.rent }}/mo</span>
+
+        <div class="btn-group">
+          <a class="btn btn-outline-secondary btn-sm"
+            href="{{ url_for('view_applications', house_id=h.id) }}">Applications</a>
+
+          <form action="{{ url_for('delete_house', house_id=h.id) }}"
+                method="post" onsubmit="return confirm('Delete this house?');">
+            <button class="btn btn-sm btn-outline-danger">Delete</button>
+          </form>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p class="text-muted mt-3">No houses yet.</p>
+{% endif %}
+{% endblock %}

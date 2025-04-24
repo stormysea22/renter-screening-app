@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Applications – {{ house.title }}{% endblock %}
+{% block content %}
+<h1>Applications for “{{ house.title }}”</h1>
+{% if applications %}
+<table class="table mt-3">
+  <thead>
+  <tr>
+    <th>Renter</th>
+    <th>Credit Score</th>
+    <th>Background</th>
+    <th>Income ($/mo)</th>
+    <th>Move‑in</th>
+    <th>Phone</th>
+    <th>AI Score</th>
+    <th>Assessment</th>
+    <th>Status</th>
+    <th>Action</th>
+  </tr>
+</thead>
+
+  <tbody>
+  {% for a in applications %}
+  <tr>
+    <td>{{ a.renter.name }}</td>
+    <td>{{ a.credit_score or '—' }}</td>
+    <td>{{ a.background_summary or '—' }}</td>
+    <td>
+      {{ a.income_summary.monthly_income if a.income_summary else '—' }}
+    </td>
+    <td>{{ a.move_in }}</td>
+    <td>{{ a.phone }}</td>
+    {% set score, note = fetch_ai_rating(a) %}
+    <td>
+      {% if score %}
+        <span class="badge bg-{% if score>=8 %}success{% elif score>=5 %}warning{% else %}danger{% endif %}">{{ score }}</span>
+      {% else %}—{% endif %}
+    </td>
+    <td>{{ note }}</td>
+    <td>
+      <span class="badge bg-{% if a.status=='approved' %}success{% elif a.status=='denied' %}danger{% else %}secondary{% endif %}">
+        {{ a.status }}
+      </span>
+    </td>
+    <td>
+  {% if a.status == 'pending' %}
+    <form action="{{ url_for('set_status', app_id=a.id, new_status='approved') }}" method="post" class="d-inline">
+      <button class="btn btn-sm btn-success">Approve</button>
+    </form>
+    <form action="{{ url_for('set_status', app_id=a.id, new_status='denied') }}" method="post" class="d-inline">
+      <button class="btn btn-sm btn-danger">Deny</button>
+    </form>
+  {% else %}
+    <em>No actions</em>
+  {% endif %}
+</td>
+  </tr>
+  {% endfor %}
+</tbody>
+
+</table>
+{% else %}
+  <p class="text-muted mt-3">No applications yet.</p>
+{% endif %}
+{% endblock %}

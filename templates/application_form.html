@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Apply – {{ house.title }}{% endblock %}
+{% block content %}
+<h1>Apply for “{{ house.title }}”</h1>
+<form method="post" class="mt-3" style="max-width:500px">
+  <div class="mb-3">
+    <label class="form-label">Phone</label>
+    <input name="phone" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Desired Move‑in Date</label>
+    <input type="date" name="move_in" class="form-control" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Notes / Pets / Occupants</label>
+    <textarea name="notes" class="form-control" rows="4"></textarea>
+  </div>
+  <button class="btn btn-success">Submit Application</button>
+</form>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Available Houses{% endblock %}
+{% block content %}
+<h1 class="mb-4">Available Houses</h1>
+<div class="row row-cols-1 row-cols-md-3 g-4">
+  {% for h in houses %}
+  <div class="col">
+    <div class="card h-100">
+      {% if h.photo %}
+        <img src="{{ url_for('static', filename='uploads/' ~ h.photo) }}"
+            class="card-img-top" style="object-fit:cover; height:180px">
+      {% endif %}
+      <div class="card-body">
+        <h5 class="card-title">{{ h.title }}</h5>
+        <p class="card-text">{{ h.description }}</p>   <!-- description INSIDE card-body -->
+        <p class="fw-bold">${{ h.rent }} / month</p>
+        {% if current_user.is_authenticated and current_user.role == 'renter' %}
+          <a href="{{ url_for('apply', house_id=h.id) }}" class="btn btn-primary w-100">
+            Apply
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

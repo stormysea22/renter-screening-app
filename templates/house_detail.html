@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ house.title }}{% endblock %}
+{% block content %}
+<h1>{{ house.title }}</h1>
+<p class="lead">${{ house.rent }} / month</p>
+<p>{{ house.description }}</p>
+{% if current_user.is_authenticated and current_user.role == 'renter' %}
+  <form action="{{ url_for('apply', house_id=house.id) }}" method="post">
+    <button class="btn btn-primary">Apply Now</button>
+  </form>
+{% endif %}
+{% endblock %}
