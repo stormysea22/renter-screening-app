@@ -4,4 +4,3 @@ logs/
 .venv/
 __pycache__/
 __blobstorage__/
-instance/
