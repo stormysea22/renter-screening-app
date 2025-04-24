@@ -23,15 +23,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          
+      - name: Install dependencies
+        run: pipenv install -r requirements.txt
 
       - name: Create and start virtual environment
         run: |
-          python -m venv venv
-          source venv/bin/activate
-      
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-        
+          pipenv shell        
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
       - name: Zip artifact for deployment
@@ -43,7 +41,6 @@ jobs:
           name: python-app
           path: |
             release.zip
-            !venv/
 
   deploy:
     runs-on: ubuntu-latest
