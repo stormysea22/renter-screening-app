@@ -27,10 +27,10 @@ jobs:
       - name: Install pipenv
         run: pip install pipenv
 
-      - name: Install dependencies
-        run: pipenv install -r requirements.txt
+      - name: Create Virtual Environment and Install dependencies
+        run: pipenv install
 
-      - name: Create and start virtual environment
+      - name: Start virtual environment Shell
         run: |
           pipenv shell        
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
