@@ -12,15 +12,18 @@ from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
+from flask_migrate import Migrate
+from flask import g
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from azure.monitor.opentelemetry import configure_azure_monitor
 
 def setup_logging(app):  
-    configure_azure_monitor(
-        logger_name=__name__,
-    )
+    if os.getenv('FLASK_ENV') != 'development':
+        configure_azure_monitor(
+            logger_name=__name__,
+        )
     app.logger.setLevel(logging.INFO)
     return app.logger
 
@@ -107,6 +110,7 @@ def handle_exception(e):
     return "Internal Server Error", 500
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 

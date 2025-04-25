@@ -21,8 +21,10 @@ cryptography = "==41.0.7"
 gunicorn = "*"
 psycopg2-binary = "*"
 azure-monitor-opentelemetry = "*"
+python-dotenv = "*"
 
 [dev-packages]
+flask-migrate = "*"
 
 [requires]
 python_version = "3.9"
