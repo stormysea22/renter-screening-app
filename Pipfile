@@ -22,8 +22,6 @@ gunicorn = "*"
 psycopg2-binary = "*"
 azure-monitor-opentelemetry = "*"
 python-dotenv = "*"
-
-[dev-packages]
 flask-migrate = "*"
 
 [requires]
