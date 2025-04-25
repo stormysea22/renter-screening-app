@@ -25,7 +25,7 @@ jobs:
           python-version: '3.9'
           
       - name: Install pipenv
-        run: pip install pipenv
+        run:  pip install pipenv
 
       - name: Create Virtual Environment and Install dependencies
         run: pipenv install
@@ -42,8 +42,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            release.zip
+          path: release.zip
 
   deploy:
     runs-on: ubuntu-latest
