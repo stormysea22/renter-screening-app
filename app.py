@@ -3,156 +3,17 @@ Run:  pip install -r requirements.txt && flask --app app run --debug
 """
 from datetime import datetime
 import random, time
-import openai, re, os, uuid, os
-import logging
-from logging.handlers import RotatingFileHandler
-import traceback
+import openai, re, os, uuid
 from functools import wraps
-from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, flash, request
+from flask import Flask, render_template, redirect, url_for, flash, request, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from flask_migrate import Migrate
-from flask import g
-from flask import current_app
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from azure.monitor.opentelemetry import configure_azure_monitor
-
-def setup_db_logging(app, db):
-    """Configure database operation logging"""
-    
-    # Log all SQL statements
-    @event.listens_for(Engine, "before_cursor_execute")
-    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        conn.info.setdefault('query_start_time', []).append(time.time())
-        current_app.logger.debug(
-            f"""SQL Query Started: {
-                str(
-                    {
-                        'statement': statement,
-                        'parameters': parameters,
-                        'executemany': executemany
-                    }
-                )
-            }"""
-        )
-
-    @event.listens_for(Engine, "after_cursor_execute")
-    def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        total = time.time() - conn.info['query_start_time'].pop(-1)
-        current_app.logger.debug(
-            f"""SQL Query Completed: {
-                str(
-                    {
-                        'duration_ms': round(total * 1000, 2),
-                        'statement': statement,
-                        'parameters': parameters,
-                        'executemany': executemany
-                    }
-                )
-            }"""
-        )
-
-    # Log connection pool events
-    @event.listens_for(db.engine, "checkout")
-    def receive_checkout(dbapi_connection, connection_record, connection_proxy):
-        current_app.logger.debug(
-            f"""Database connection checked out: {
-                str(
-                    {
-                        'pool_id': id(connection_record),
-                        'connection_id': id(dbapi_connection)
-                    }
-                )
-            }"""
-        )
-
-    @event.listens_for(db.engine, "checkin")
-    def receive_checkin(dbapi_connection, connection_record):
-        current_app.logger.debug(
-            f"""Database connection checked in: {
-                str(
-                    {
-                        'pool_id': id(connection_record),
-                        'connection_id': id(dbapi_connection)
-                    }
-                )
-            }"""
-        )
-
-def log_db_operation(operation_type):
-    """Decorator for logging database operations"""
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            start_time = time.time()
-            try:
-                result = f(*args, **kwargs)
-                duration_ms = (time.time() - start_time) * 1000
-                current_app.logger.info(
-                    f"""Database {operation_type}: {
-                        str(
-                            {
-                                'operation': f.__name__,
-                                'args': args,
-                                'kwargs': kwargs,
-                                'duration_ms': round(duration_ms, 2)
-                            }
-                        )   
-                    }""",
-                )
-                return result
-            except Exception as e:
-                duration_ms = (time.time() - start_time) * 1000
-                current_app.logger.error(
-                    f"""Database {operation_type} failed: {
-                        str(
-                            {
-                                'operation': f.__name__,
-                                'duration_ms': round(duration_ms, 2),
-                                'error': str(e),
-                                'success': False
-                            }
-                        )
-                    }"""
-                )
-                raise
-        return wrapper
-    return decorator
-
-def setup_logging(app):
-    """Configure application logging"""
-    if os.getenv('FLASK_ENV') != 'development':
-        configure_azure_monitor(
-            logger_name=__name__,
-        )
-        gunicorn_logger = logging.getLogger('gunicorn.error')
-        app.logger.handlers = gunicorn_logger.handlers
-        app.logger.setLevel(logging.INFO)
-    
-    # Create logs directory
-    log_dir = os.path.join(app.root_path, 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Database specific log handler
-    db_handler = RotatingFileHandler(
-        os.path.join(log_dir, 'database.log'),
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
-    )
-    db_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s'
-    ))
-    db_handler.setLevel(logging.DEBUG)
-
-    # Add handlers to app logger
-    app.logger.addHandler(db_handler)
-    app.logger.setLevel(logging.INFO)
-    return app.logger
+from config.logging import setup_logging, setup_db_logging, log_db_operation, setup_request_logging
 
 # Initialize app
 app = Flask(__name__)
@@ -168,75 +29,13 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True
 }
 
-# Setup Error Handling
-@app.errorhandler(500)
-def internal_error(exception):
-    app.logger.error(f"Exception occurred: {str(exception.original_exception)}")
-    app.logger.error(traceback.format_exc())
-    return render_template('500.html'), 500
-
 # Setup enhanced logging
 logger = setup_logging(app)
-
-# Add request logging middleware
-@app.before_request
-def log_request_info():
-    g.start_time = time.time()
-    app.logger.info(
-        f"""Request started:{
-            str(
-                {
-                    'method': request.method,
-                    'path': request.path,
-                    'ip': request.remote_addr,
-                    'user_agent': request.headers.get('User-Agent'),
-                    'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
-                }
-            )
-        }"""
-    )
-
-@app.after_request
-def log_response_info(response):
-    duration_ms = (time.time() - g.start_time) * 1000
-    app.logger.info(
-        f"""Request completed: {
-            str(
-                {
-                    'method': request.method,
-                    'path': request.path,
-                    'ip': request.remote_addr,
-                    'user_agent': request.headers.get('User-Agent'),
-                    'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In",
-                    'status_code': response.status_code,
-                    'duration_ms': round(duration_ms, 2)
-                }
-            )
-        }"""
-    )
-    return response
-
-# Add error handler
-@app.errorhandler(Exception)
-def handle_exception(e):
-    app.logger.error(
-        f"""Unhandled exception: {
-            str(
-                {
-                    'error': str(e),
-                    'traceback': traceback.format_exc(),
-                    'path': request.path,
-                    'method': request.method,
-                    'user_id': current_user.id if current_user.is_authenticated else 'User Not Logged In'
-                }
-            )
-        }"""
-    )
-    return "Internal Server Error", 500
 
 db = SQLAlchemy(app)
 with app.app_context():
     setup_db_logging(app, db)
+    setup_request_logging(app)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
