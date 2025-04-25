@@ -18,7 +18,7 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 from azure.monitor.opentelemetry import configure_azure_monitor
 
 configure_azure_monitor(
-    logger_name="app",
+    logger_name=__name__,
 )
 
 
@@ -47,7 +47,6 @@ def setup_logging(app):
 
     formatter = JsonFormatter()
     
-    app.logger.getLogger("app")
     app.logger.setFormatter(formatter)
     app.logger.setLevel(logging.INFO)
     return app.logger
