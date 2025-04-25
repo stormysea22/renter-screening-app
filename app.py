@@ -130,6 +130,9 @@ def setup_logging(app):
         configure_azure_monitor(
             logger_name=__name__,
         )
+        gunicorn_logger = logging.getLogger('gunicorn.error')
+        app.logger.handlers = gunicorn_logger.handlers
+        app.logger.setLevel(logging.INFO)
     
     # Create logs directory
     log_dir = os.path.join(app.root_path, 'logs')
