@@ -17,37 +17,10 @@ from werkzeug.utils import secure_filename
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from azure.monitor.opentelemetry import configure_azure_monitor
 
-configure_azure_monitor(
-    logger_name=__name__,
-)
-
-
-def setup_logging(app):
-    """Configure comprehensive application logging"""
-    # Create logs directory
-    log_dir = os.path.join(app.root_path, 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-
-    # JSON-style formatter
-    class JsonFormatter(logging.Formatter):
-        def format(self, record):
-            log_obj = {
-                'timestamp': self.formatTime(record),
-                'level': record.levelname,
-                'module': record.module,
-                'function': record.funcName,
-                'line': record.lineno,
-                'message': record.getMessage()
-            }
-            if hasattr(record, 'user_id'):
-                log_obj['user_id'] = record.user_id
-            if hasattr(record, 'duration_ms'):
-                log_obj['duration_ms'] = record.duration_ms
-            return str(log_obj)
-
-    formatter = JsonFormatter()
-    
-    app.logger.setFormatter(formatter)
+def setup_logging(app):  
+    configure_azure_monitor(
+        logger_name=__name__,
+    )
     app.logger.setLevel(logging.INFO)
     return app.logger
 
