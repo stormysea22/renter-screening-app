@@ -7,10 +7,6 @@
     {% for h in houses %}
       <li class="list-group-item d-flex justify-content-between align-items-center">
         <span>{{ h.title }} – ${{ h.rent }}/mo</span>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('view_applications', house_id=h.id) }}">View Applications</a>
-      </li>
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        <span>{{ h.title }} – ${{ h.rent }}/mo</span>
 
         <div class="btn-group">
           <a class="btn btn-outline-secondary btn-sm"
