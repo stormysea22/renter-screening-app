@@ -19,6 +19,7 @@ azure-identity = "==1.16.0"
 azure-core = "==1.33.0"
 cryptography = "==41.0.7"
 gunicorn = "*"
+psycopg2-binary = "*"
 
 [dev-packages]
 
