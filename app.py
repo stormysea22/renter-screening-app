@@ -14,21 +14,66 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from flask_migrate import Migrate
 from flask import g
+from flask import current_app
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from azure.monitor.opentelemetry import configure_azure_monitor
 
-def setup_logging(app):  
-    if os.getenv('FLASK_ENV') != 'development':
-        configure_azure_monitor(
-            logger_name=__name__,
+def setup_db_logging(app, db):
+    """Configure database operation logging"""
+    
+    # Log all SQL statements
+    @event.listens_for(Engine, "before_cursor_execute")
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        conn.info.setdefault('query_start_time', []).append(time.time())
+        current_app.logger.debug(
+            "SQL Query Started",
+            extra={
+                'statement': statement,
+                'parameters': parameters,
+                'executemany': executemany
+            }
         )
-    app.logger.setLevel(logging.INFO)
-    return app.logger
 
-# Performance monitoring decorator
-def log_performance(category):
+    @event.listens_for(Engine, "after_cursor_execute")
+    def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        total = time.time() - conn.info['query_start_time'].pop(-1)
+        current_app.logger.debug(
+            "SQL Query Completed",
+            extra={
+                'duration_ms': round(total * 1000, 2),
+                'statement': statement,
+                'parameters': parameters,
+                'executemany': executemany
+            }
+        )
+
+    # Log connection pool events
+    @event.listens_for(db.engine, "checkout")
+    def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+        current_app.logger.debug(
+            "Database connection checked out",
+            extra={
+                'pool_id': id(connection_record),
+                'connection_id': id(dbapi_connection)
+            }
+        )
+
+    @event.listens_for(db.engine, "checkin")
+    def receive_checkin(dbapi_connection, connection_record):
+        current_app.logger.debug(
+            "Database connection checked in",
+            extra={
+                'pool_id': id(connection_record),
+                'connection_id': id(dbapi_connection)
+            }
+        )
+
+def log_db_operation(operation_type):
+    """Decorator for logging database operations"""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -36,32 +81,75 @@ def log_performance(category):
             try:
                 result = f(*args, **kwargs)
                 duration_ms = (time.time() - start_time) * 1000
-                app.logger.info(
-                    f"{category} operation completed",
+                current_app.logger.info(
+                    f"Database {operation_type}",
                     extra={
-                        'duration_ms': duration_ms,
                         'operation': f.__name__,
-                        'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
+                        'duration_ms': round(duration_ms, 2),
+                        'success': True
                     }
                 )
                 return result
             except Exception as e:
-                app.logger.error(
-                    f"{category} operation failed: {str(e)}",
+                duration_ms = (time.time() - start_time) * 1000
+                current_app.logger.error(
+                    f"Database {operation_type} failed",
                     extra={
                         'operation': f.__name__,
+                        'duration_ms': round(duration_ms, 2),
                         'error': str(e),
-                        'traceback': traceback.format_exc()
+                        'success': False
                     }
                 )
                 raise
         return wrapper
     return decorator
 
+def setup_logging(app):
+    """Configure application logging"""
+    if os.getenv('FLASK_ENV') != 'development':
+        configure_azure_monitor(
+            logger_name=__name__,
+        )
+    
+    # Create logs directory
+    log_dir = os.path.join(app.root_path, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Database specific log handler
+    db_handler = RotatingFileHandler(
+        os.path.join(log_dir, 'database.log'),
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    db_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [%(extra)s]'
+    ))
+    db_handler.setLevel(logging.DEBUG)
+
+    # Add handlers to app logger
+    app.logger.addHandler(db_handler)
+    app.logger.setLevel(logging.INFO)
+    return app.logger
+
 # Initialize app
 app = Flask(__name__)
 app.config['SECRET_KEY']
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_timeout': 30,
+    'pool_recycle': 1800,
+    'pool_pre_ping': True
+}
+
+# Setup Error Handling
+@app.errorhandler(500)
+def internal_error(exception):
+    app.logger.error("Exception occurred", extra={'error': str(exception.original_exception)})
+    app.logger.error(traceback.format_exc())
+    return render_template('500.html'), 500
 
 # Setup enhanced logging
 logger = setup_logging(app)
@@ -110,6 +198,8 @@ def handle_exception(e):
     return "Internal Server Error", 500
 
 db = SQLAlchemy(app)
+with app.app_context():
+    setup_db_logging(app, db)
 migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -162,12 +252,20 @@ class Application(db.Model):
 
 
 @login_manager.user_loader
+@log_db_operation('query')
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 
+@log_db_operation('insert')
+def create_user(name, email, role, password):
+    user = User(name=name, email=email, role=role)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return user
+
 # -------------------- Helpers -------------------- #
-@log_performance('database')
 def run_background_checks(app_obj):
     """Synchronous fake‑API calls; replace with real HTTP requests later."""
     # ‑‑ credit score
@@ -196,7 +294,6 @@ def run_background_checks(app_obj):
 openai.api_key = os.getenv('OPENAI_API_KEY')
 GPT_MODEL = "gpt-4o-mini"
 
-@log_performance('ai')
 def fetch_ai_rating(app_obj):
     """
     Returns (score:int, assessment:str).
@@ -276,7 +373,6 @@ if BLOB_CONN:
     except Exception:
         pass  # already exists
 
-@log_performance('upload')
 def upload_to_blob(file_stream, filename, mimetype):
     """
     Uploads a file‑like object to Azure Blob and returns the public URL.
@@ -302,7 +398,6 @@ def home():
 
 # Update the signup route
 @app.route('/signup', methods=['GET', 'POST'])
-@log_performance('auth')
 def signup():
     if request.method == 'POST':
         app.logger.info(f"New signup attempt for email: {request.form['email']}")
@@ -322,7 +417,6 @@ def signup():
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
-@log_performance('auth')
 def login():
     if request.method == 'POST':
         user = User.query.filter_by(email=request.form['email']).first()
@@ -341,7 +435,6 @@ def logout():
 # ----------- Landlord: create house ----------- #
 @app.route('/houses/new', methods=['GET', 'POST'])
 @login_required
-@log_performance('database')
 def new_house():
     if current_user.role != 'landlord':
         app.logger.warning(f"Non-landlord user {current_user.email} attempted to create house listing")
@@ -441,7 +534,6 @@ def delete_house(house_id):
 # ----------- Renter: application form ----------- #
 @app.route('/apply/<int:house_id>', methods=['GET', 'POST'])
 @login_required
-@log_performance('database')
 def apply(house_id):
     if current_user.role != 'renter':
         app.logger.warning(f"Non-renter user {current_user.email} attempted to submit application")

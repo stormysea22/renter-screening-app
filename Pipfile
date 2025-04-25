@@ -26,3 +26,8 @@ flask-migrate = "*"
 
 [requires]
 python_version = "3.9"
+
+[scripts]
+local = "flask run --debug"
+migrate = "flask db migrate"
+upgrade = "flask db upgrade --directory migrations"
