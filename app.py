@@ -157,6 +157,8 @@ def setup_logging(app):
 # Initialize app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+app.config['USE_LOCAL_STORAGE'] = os.getenv('USE_LOCAL_STORAGE', 'false')
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', os.path.join(app.root_path, 'static', 'uploads'))
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -496,7 +498,7 @@ def new_house():
             #     flash('Invalid image format.', 'warning')
             if file and allowed_ext(file.filename):
             # For local storage:
-                if app.config["USE_LOCAL_STORAGE"] == True:  # This could be a flag or configuration setting
+                if app.config["USE_LOCAL_STORAGE"] == "true":  # This could be a flag or configuration setting
                     filename = secure_filename(file.filename)
                     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                     file.save(file_path)
