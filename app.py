@@ -30,46 +30,58 @@ def setup_db_logging(app, db):
     def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         conn.info.setdefault('query_start_time', []).append(time.time())
         current_app.logger.debug(
-            "SQL Query Started",
-            extra={
-                'statement': statement,
-                'parameters': parameters,
-                'executemany': executemany
-            }
+            f"""SQL Query Started: {
+                str(
+                    {
+                        'statement': statement,
+                        'parameters': parameters,
+                        'executemany': executemany
+                    }
+                )
+            }"""
         )
 
     @event.listens_for(Engine, "after_cursor_execute")
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         total = time.time() - conn.info['query_start_time'].pop(-1)
         current_app.logger.debug(
-            "SQL Query Completed",
-            extra={
-                'duration_ms': round(total * 1000, 2),
-                'statement': statement,
-                'parameters': parameters,
-                'executemany': executemany
-            }
+            f"""SQL Query Completed: {
+                str(
+                    {
+                        'duration_ms': round(total * 1000, 2),
+                        'statement': statement,
+                        'parameters': parameters,
+                        'executemany': executemany
+                    }
+                )
+            }"""
         )
 
     # Log connection pool events
     @event.listens_for(db.engine, "checkout")
     def receive_checkout(dbapi_connection, connection_record, connection_proxy):
         current_app.logger.debug(
-            "Database connection checked out",
-            extra={
-                'pool_id': id(connection_record),
-                'connection_id': id(dbapi_connection)
-            }
+            f"""Database connection checked out: {
+                str(
+                    {
+                        'pool_id': id(connection_record),
+                        'connection_id': id(dbapi_connection)
+                    }
+                )
+            }"""
         )
 
     @event.listens_for(db.engine, "checkin")
     def receive_checkin(dbapi_connection, connection_record):
         current_app.logger.debug(
-            "Database connection checked in",
-            extra={
-                'pool_id': id(connection_record),
-                'connection_id': id(dbapi_connection)
-            }
+            f"""Database connection checked in: {
+                str(
+                    {
+                        'pool_id': id(connection_record),
+                        'connection_id': id(dbapi_connection)
+                    }
+                )
+            }"""
         )
 
 def log_db_operation(operation_type):
@@ -82,24 +94,31 @@ def log_db_operation(operation_type):
                 result = f(*args, **kwargs)
                 duration_ms = (time.time() - start_time) * 1000
                 current_app.logger.info(
-                    f"Database {operation_type}",
-                    extra={
-                        'operation': f.__name__,
-                        'duration_ms': round(duration_ms, 2),
-                        'success': True
-                    }
+                    f"""Database {operation_type}: {
+                        str(
+                            {
+                                'operation': f.__name__,
+                                'args': args,
+                                'kwargs': kwargs,
+                                'duration_ms': round(duration_ms, 2)
+                            }
+                        )   
+                    }""",
                 )
                 return result
             except Exception as e:
                 duration_ms = (time.time() - start_time) * 1000
                 current_app.logger.error(
-                    f"Database {operation_type} failed",
-                    extra={
-                        'operation': f.__name__,
-                        'duration_ms': round(duration_ms, 2),
-                        'error': str(e),
-                        'success': False
-                    }
+                    f"""Database {operation_type} failed: {
+                        str(
+                            {
+                                'operation': f.__name__,
+                                'duration_ms': round(duration_ms, 2),
+                                'error': str(e),
+                                'success': False
+                            }
+                        )
+                    }"""
                 )
                 raise
         return wrapper
@@ -123,7 +142,7 @@ def setup_logging(app):
         backupCount=5
     )
     db_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [%(extra)s]'
+        '%(asctime)s %(levelname)s: %(message)s'
     ))
     db_handler.setLevel(logging.DEBUG)
 
@@ -134,7 +153,7 @@ def setup_logging(app):
 
 # Initialize app
 app = Flask(__name__)
-app.config['SECRET_KEY']
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -147,7 +166,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 # Setup Error Handling
 @app.errorhandler(500)
 def internal_error(exception):
-    app.logger.error("Exception occurred", extra={'error': str(exception.original_exception)})
+    app.logger.error(f"Exception occurred: {str(exception.original_exception)}")
     app.logger.error(traceback.format_exc())
     return render_template('500.html'), 500
 
@@ -159,26 +178,36 @@ logger = setup_logging(app)
 def log_request_info():
     g.start_time = time.time()
     app.logger.info(
-        "Request started",
-        extra={
-            'method': request.method,
-            'path': request.path,
-            'ip': request.remote_addr,
-            'user_agent': request.headers.get('User-Agent'),
-            'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
-        }
+        f"""Request started:{
+            str(
+                {
+                    'method': request.method,
+                    'path': request.path,
+                    'ip': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent'),
+                    'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
+                }
+            )
+        }"""
     )
 
 @app.after_request
 def log_response_info(response):
     duration_ms = (time.time() - g.start_time) * 1000
     app.logger.info(
-        "Request completed",
-        extra={
-            'duration_ms': duration_ms,
-            'status_code': response.status_code,
-            'content_length': response.content_length
-        }
+        f"""Request completed: {
+            str(
+                {
+                    'method': request.method,
+                    'path': request.path,
+                    'ip': request.remote_addr,
+                    'user_agent': request.headers.get('User-Agent'),
+                    'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In",
+                    'status_code': response.status_code,
+                    'duration_ms': round(duration_ms, 2)
+                }
+            )
+        }"""
     )
     return response
 
@@ -186,14 +215,17 @@ def log_response_info(response):
 @app.errorhandler(Exception)
 def handle_exception(e):
     app.logger.error(
-        "Unhandled exception",
-        extra={
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-            'path': request.path,
-            'method': request.method,
-            'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
-        }
+        f"""Unhandled exception: {
+            str(
+                {
+                    'error': str(e),
+                    'traceback': traceback.format_exc(),
+                    'path': request.path,
+                    'method': request.method,
+                    'user_id': current_user.id if current_user.is_authenticated else 'User Not Logged In'
+                }
+            )
+        }"""
     )
     return "Internal Server Error", 500
 
@@ -209,7 +241,7 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # 'renter' | 'landlord'
     houses = db.relationship('House', backref='landlord', lazy=True)
     applications = db.relationship('Application', backref='renter', lazy=True)
@@ -217,8 +249,11 @@ class User(db.Model, UserMixin):
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
         app.logger.info(
-            "Password hash updated",
-            extra={'user_id': self.id}
+            f"""Password hash updated for: {
+                str(
+                    {'user_id': self.id}
+                )
+            }"""
         )
 
     def check_password(self, password):
