@@ -41,7 +41,7 @@ def log_performance(category):
                     extra={
                         'duration_ms': duration_ms,
                         'operation': f.__name__,
-                        'user_id': current_user.id if current_user.is_authenticated else None
+                        'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
                     }
                 )
                 return result
@@ -77,7 +77,7 @@ def log_request_info():
             'path': request.path,
             'ip': request.remote_addr,
             'user_agent': request.headers.get('User-Agent'),
-            'user_id': current_user.id if current_user.is_authenticated else None
+            'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
         }
     )
 
@@ -104,7 +104,7 @@ def handle_exception(e):
             'traceback': traceback.format_exc(),
             'path': request.path,
             'method': request.method,
-            'user_id': current_user.id if current_user.is_authenticated else None
+            'user_id': current_user.id if current_user.is_authenticated else "User Not Logged In"
         }
     )
     return "Internal Server Error", 500
