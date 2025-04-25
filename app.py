@@ -3,7 +3,7 @@ Run:  pip install -r requirements.txt && flask --app app run --debug
 """
 from datetime import datetime
 import random, time
-import openai, re, os, uuid
+import openai, re, os, uuid, os
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
@@ -47,7 +47,7 @@ def configure_logging(app):
 # Initialize app
 app = Flask(__name__)
 app.config['SECRET_KEY']
-app.config['SQLALCHEMY_DATABASE_URI'] = app.config['DATABASE_URL']
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
 
 # Configure logging
 configure_logging(app)
