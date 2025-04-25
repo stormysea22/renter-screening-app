@@ -6,6 +6,8 @@ import random, time
 import openai, re, os, uuid, os
 import logging
 from logging.handlers import RotatingFileHandler
+import traceback
+from functools import wraps
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_sqlalchemy import SQLAlchemy
@@ -13,44 +15,124 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from azure.storage.blob import BlobServiceClient, ContentSettings
+from azure.monitor.opentelemetry import configure_azure_monitor
+
+configure_azure_monitor(
+    logger_name="app",
+)
 
 
-# Set up logging
-def configure_logging(app):
-    # Create logs directory if it doesn't exist
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
+def setup_logging(app):
+    """Configure comprehensive application logging"""
+    # Create logs directory
+    log_dir = os.path.join(app.root_path, 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+
+    # JSON-style formatter
+    class JsonFormatter(logging.Formatter):
+        def format(self, record):
+            log_obj = {
+                'timestamp': self.formatTime(record),
+                'level': record.levelname,
+                'module': record.module,
+                'function': record.funcName,
+                'line': record.lineno,
+                'message': record.getMessage()
+            }
+            if hasattr(record, 'user_id'):
+                log_obj['user_id'] = record.user_id
+            if hasattr(record, 'duration_ms'):
+                log_obj['duration_ms'] = record.duration_ms
+            return str(log_obj)
+
+    formatter = JsonFormatter()
     
-    # Set up file handler with rotation
-    file_handler = RotatingFileHandler(
-        'logs/app.log', 
-        maxBytes=10240000,  # 10MB
-        backupCount=5
-    )
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    ))
-    file_handler.setLevel(logging.INFO)
-    
-    # Set up console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
-    console_handler.setLevel(logging.INFO)
-    
-    # Add handlers to app logger
-    app.logger.addHandler(file_handler)
-    app.logger.addHandler(console_handler)
+    app.logger.getLogger("app")
+    app.logger.setFormatter(formatter)
     app.logger.setLevel(logging.INFO)
-    
-    app.logger.info('Application startup')
+    return app.logger
+
+# Performance monitoring decorator
+def log_performance(category):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            try:
+                result = f(*args, **kwargs)
+                duration_ms = (time.time() - start_time) * 1000
+                app.logger.info(
+                    f"{category} operation completed",
+                    extra={
+                        'duration_ms': duration_ms,
+                        'operation': f.__name__,
+                        'user_id': current_user.id if current_user.is_authenticated else None
+                    }
+                )
+                return result
+            except Exception as e:
+                app.logger.error(
+                    f"{category} operation failed: {str(e)}",
+                    extra={
+                        'operation': f.__name__,
+                        'error': str(e),
+                        'traceback': traceback.format_exc()
+                    }
+                )
+                raise
+        return wrapper
+    return decorator
 
 # Initialize app
 app = Flask(__name__)
 app.config['SECRET_KEY']
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
 
-# Configure logging
-configure_logging(app)
+# Setup enhanced logging
+logger = setup_logging(app)
+
+# Add request logging middleware
+@app.before_request
+def log_request_info():
+    g.start_time = time.time()
+    app.logger.info(
+        "Request started",
+        extra={
+            'method': request.method,
+            'path': request.path,
+            'ip': request.remote_addr,
+            'user_agent': request.headers.get('User-Agent'),
+            'user_id': current_user.id if current_user.is_authenticated else None
+        }
+    )
+
+@app.after_request
+def log_response_info(response):
+    duration_ms = (time.time() - g.start_time) * 1000
+    app.logger.info(
+        "Request completed",
+        extra={
+            'duration_ms': duration_ms,
+            'status_code': response.status_code,
+            'content_length': response.content_length
+        }
+    )
+    return response
+
+# Add error handler
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.error(
+        "Unhandled exception",
+        extra={
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'path': request.path,
+            'method': request.method,
+            'user_id': current_user.id if current_user.is_authenticated else None
+        }
+    )
+    return "Internal Server Error", 500
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -68,6 +150,10 @@ class User(db.Model, UserMixin):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        app.logger.info(
+            "Password hash updated",
+            extra={'user_id': self.id}
+        )
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -105,7 +191,7 @@ def load_user(user_id):
 
 
 # -------------------- Helpers -------------------- #
-
+@log_performance('database')
 def run_background_checks(app_obj):
     """Synchronous fake‑API calls; replace with real HTTP requests later."""
     # ‑‑ credit score
@@ -134,6 +220,7 @@ def run_background_checks(app_obj):
 openai.api_key = os.getenv('OPENAI_API_KEY')
 GPT_MODEL = "gpt-4o-mini"
 
+@log_performance('ai')
 def fetch_ai_rating(app_obj):
     """
     Returns (score:int, assessment:str).
@@ -213,6 +300,7 @@ if BLOB_CONN:
     except Exception:
         pass  # already exists
 
+@log_performance('upload')
 def upload_to_blob(file_stream, filename, mimetype):
     """
     Uploads a file‑like object to Azure Blob and returns the public URL.
@@ -238,6 +326,7 @@ def home():
 
 # Update the signup route
 @app.route('/signup', methods=['GET', 'POST'])
+@log_performance('auth')
 def signup():
     if request.method == 'POST':
         app.logger.info(f"New signup attempt for email: {request.form['email']}")
@@ -257,6 +346,7 @@ def signup():
     return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@log_performance('auth')
 def login():
     if request.method == 'POST':
         user = User.query.filter_by(email=request.form['email']).first()
@@ -275,6 +365,7 @@ def logout():
 # ----------- Landlord: create house ----------- #
 @app.route('/houses/new', methods=['GET', 'POST'])
 @login_required
+@log_performance('database')
 def new_house():
     if current_user.role != 'landlord':
         app.logger.warning(f"Non-landlord user {current_user.email} attempted to create house listing")
@@ -374,6 +465,7 @@ def delete_house(house_id):
 # ----------- Renter: application form ----------- #
 @app.route('/apply/<int:house_id>', methods=['GET', 'POST'])
 @login_required
+@log_performance('database')
 def apply(house_id):
     if current_user.role != 'renter':
         app.logger.warning(f"Non-renter user {current_user.email} attempted to submit application")

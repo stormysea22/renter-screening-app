@@ -20,6 +20,7 @@ azure-core = "==1.33.0"
 cryptography = "==41.0.7"
 gunicorn = "*"
 psycopg2-binary = "*"
+azure-monitor-opentelemetry = "*"
 
 [dev-packages]
 
