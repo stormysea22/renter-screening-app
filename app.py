@@ -131,7 +131,7 @@ def run_background_checks(app_obj):
     
     # ‑‑ AI rating --#
     
-openai.api_key = app.config['OPENAI_API_KEY']
+openai.api_key = os.getenv('OPENAI_API_KEY')
 GPT_MODEL = "gpt-4o-mini"
 
 def fetch_ai_rating(app_obj):
