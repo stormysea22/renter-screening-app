@@ -201,7 +201,7 @@ def allowed_ext(fname):
     return '.' in fname and fname.rsplit('.', 1)[1].lower() in ALLOWED_EXT
 
 # Blob config
-BLOB_CONN = app.config["AZURE_STORAGE_CONNECTION_STRING"]
+BLOB_CONN = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 BLOB_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "house-photos")
 
 blob_service = None
