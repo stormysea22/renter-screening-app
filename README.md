@@ -9,6 +9,7 @@
 In the residential rental market, landlords face significant challenges in efficiently evaluating potential tenants. Traditional background checks and manual income verifications are time-consuming, costly, and often inconsistent, leading to poor tenant-landlord matches and increased financial risks. Renters, on the other hand, seek a transparent and streamlined application process that respects their privacy while fairly representing their financial and rental histories.
 
 There is a need for a digital platform that allows landlords to easily collect rental applications, automatically verify renter information — including background checks, credit reports, and income statements — and leverage AI to generate consistent, data-driven risk scores for prospective tenants. This platform should enhance decision-making for landlords while providing renters with a smooth, transparent, and fair application experience.
+The application is an AI-driven rental platform hosted on Azure Cloud, using App Service for deployment, Blob Storage for renter and property photos, and Cosmos DB for secure data storage, enabling landlords to collect renter applications, verify background and income information, and receive automated risk scores for tenant selection.
 
 
 
@@ -17,6 +18,7 @@ There is a need for a digital platform that allows landlords to easily collect r
 ## 💡 Solution
 
 The application is an AI-driven rental platform hosted on Azure Cloud, using App Service for deployment, Blob Storage for renter and property photos, and Cosmos DB for secure data storage, enabling landlords to collect renter applications, verify background and income information, and receive automated risk scores for tenant selection.
+
 ---
 
 ## 🧠 How It Works
