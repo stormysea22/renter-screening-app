@@ -39,8 +39,10 @@ You can also include a diagram or screenshot if useful.
 
 ## 🛠️ How to Run It
 
-# Repo Link
-https://gitlab.com/yourteam/project.git
+# Repo Links
+https://github.com/stormysea22/renter-screening-app.git
+Website:
+https://github.com/stormysea22/renter-screening-app
 cd project
 
 # Live Website in Aure Cloud
