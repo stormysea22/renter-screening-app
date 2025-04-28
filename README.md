@@ -40,10 +40,10 @@ You can also include a diagram or screenshot if useful.
 ## 🛠️ How to Run It
 
 # Repo Links
-https://github.com/stormysea22/renter-screening-app.git
-Website:
-https://github.com/stormysea22/renter-screening-app
-cd project
+- https://github.com/stormysea22/renter-screening-app.git
+- Website:
+- https://github.com/stormysea22/renter-screening-app
+- cd project
 
 # Live Website in Aure Cloud
 wapaitenant-cjb9cbgfckbqebhk.canadacentral-01.azurewebsites.net
