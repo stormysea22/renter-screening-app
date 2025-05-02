@@ -262,7 +262,8 @@ def signup():
 def login():
     if request.method == 'POST':
         user = User.query.filter_by(email=request.form['email']).first()
-        if user and user.check_password(request.form['password']):
+        if user and user.check_password(request.form['password']) and user.active == True:
+            app.logger.info(f"User {user.email} logged in")
             login_user(user)
             return redirect(url_for('home'))
         flash('Invalid credentials', 'danger')
