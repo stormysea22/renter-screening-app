@@ -49,6 +49,7 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False)  # 'renter' | 'landlord'
     houses = db.relationship('House', backref='landlord', lazy=True)
     applications = db.relationship('Application', backref='renter', lazy=True)
+    active = db.Column(db.Boolean(), default=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -71,6 +72,7 @@ class House(db.Model):
     landlord_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     photo       = db.Column(db.String(200))  
     applications = db.relationship('Application', backref='house', lazy=True)
+    active = db.Column(db.Boolean(), default=True)
 
 class Application(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -87,6 +89,7 @@ class Application(db.Model):
     ai_score = db.Column(db.Integer) #1-10
     ai_assessment = db.Column(db.String(200))   # short rationale
     photo = db.Column(db.String(200))   # holds filename or blob URL
+    active = db.Column(db.Boolean(), default=True)
 
 
 
@@ -232,7 +235,7 @@ def upload_to_blob(file_stream, filename, mimetype):
 # -------------------- Routes -------------------- #
 @app.route('/')
 def home():
-    houses = House.query.all()
+    houses = House.query.filter_by(active=True).all()
     return render_template('home.html', houses=houses)
 
 # Update the signup route
@@ -350,24 +353,16 @@ def delete_house(house_id):
         flash("Not authorized.", "warning")
         return redirect(url_for("dashboard"))
 
-    # --- delete the photo ---
-    if house.photo:
-        if house.photo.startswith("http"):          # Azure Blob
-            try:
-                blob_name = house.photo.split("/")[-1]
-                blob_service.get_blob_client(BLOB_CONTAINER, blob_name).delete_blob()
-            except Exception as e:
-                app.logger.warning(f"Blob delete failed: {e}")
-        else:                                       # Local file
-            path = os.path.join(app.root_path, "static", "uploads", house.photo)
-            if os.path.exists(path):
-                os.remove(path)
-
-    # --- delete the DB row (and applications via cascade) ---
-    db.session.delete(house)
+    # Soft delete - set active flag to False
+    house.active = False
+    # Also deactivate all associated applications
+    for application in house.applications:
+        application.active = False
+    
     db.session.commit()
+    app.logger.info(f"House {house_id} and its applications soft-deleted by user {current_user.id}")
 
-    flash("House deleted.", "info")
+    flash("House removed from listings.", "info")
     return redirect(url_for("dashboard"))
 
 # ----------- Renter: application form ----------- #
@@ -424,7 +419,7 @@ def dashboard():
     if current_user.role != 'landlord':
         flash('Access denied', 'warning')
         return redirect(url_for('home'))
-    houses = House.query.filter_by(landlord_id=current_user.id).all()
+    houses = House.query.filter_by(landlord_id=current_user.id, active=True).all()
     return render_template('dashboard.html', houses=houses)
 
 @app.route('/applications/<int:house_id>')
@@ -434,7 +429,7 @@ def view_applications(house_id):
     if house.landlord_id != current_user.id:
         flash('Access denied', 'warning')
         return redirect(url_for('home'))
-    applications = Application.query.filter_by(house_id=house_id).all()
+    applications = Application.query.filter_by(house_id=house_id, active=True).all()
     return render_template('applications.html', house=house, applications=applications)
 
 @app.route('/applications/<int:app_id>/set/<string:new_status>', methods=['POST'])
